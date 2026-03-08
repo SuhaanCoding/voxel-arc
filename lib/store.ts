@@ -132,20 +132,19 @@ export const useVoxelStore = create(
       state.mirrorAxes[axis] = value;
     }),
     setGridSize: (size) => set((state) => {
-      state.gridSize = size;
-
-      // Remove voxels that are now out of bounds
-      const outOfBounds: VoxelKey[] = [];
-      for (const [key] of state.voxels) {
-        const [x, y, z] = parseKey(key);
-        if (x >= size || y >= size || z >= size) {
-          outOfBounds.push(key);
+      // ONLY delete voxels if the grid is shrinking!
+      if (size < state.gridSize) {
+        const toDelete: VoxelKey[] = [];
+        for (const [key] of state.voxels) {
+          const [x, y, z] = parseKey(key);
+          if (x >= size || y >= size || z >= size) toDelete.push(key);
         }
+        toDelete.forEach(k => {
+          state.voxels.delete(k);
+          state.selectedVoxels.delete(k); // Also deselect if deleted
+        });
       }
-      for (const key of outOfBounds) {
-        state.voxels.delete(key);
-        state.selectedVoxels.delete(key);
-      }
+      state.gridSize = size;
     }),
     toggleWireframe: () => set((state) => {
       state.showWireframe = !state.showWireframe;

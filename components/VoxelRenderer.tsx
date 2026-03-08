@@ -596,11 +596,10 @@ export default function VoxelRenderer() {
               .map(([x, y, z]) => ({ type: "PLACE" as const, key: toKey(x, y, z), color: store.activeColor }));
           }
           if (commands.length > 0) store.executeBatch(commands);
-          boxBrushStart.current = null;
-          boxBrushEnd.current = null;
-          isBoxDragging.current = false;
-          return;
         }
+
+        // Safety reset: ALWAYS forcefully clear box brush tracking data on mouse up
+        // This prevents the brush from permanently locking if the user drags off-canvas
         boxBrushStart.current = null;
         boxBrushEnd.current = null;
         isBoxDragging.current = false;
@@ -679,7 +678,7 @@ export default function VoxelRenderer() {
       window.removeEventListener("pointermove", onWindowMove, true);
       window.removeEventListener("pointerup", onWindowUp, true);
     };
-  }, [gl, camera]);
+  }, [gl, camera, gridSize]);
 
   useEffect(() => {
     return () => {

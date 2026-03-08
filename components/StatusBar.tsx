@@ -13,7 +13,11 @@ function randomHexColor(): string {
 export default function StatusBar() {
   const voxelCount = useVoxelStore((s) => s.voxels.size);
   const gridSize = useVoxelStore((s) => s.gridSize);
-  const setGridSize = useVoxelStore((s) => s.setGridSize);
+  const setStoreGridSize = useVoxelStore((s) => s.setGridSize);
+  const [localGridSize, setLocalGridSize] = useState(gridSize);
+
+  // Sync if store changes externally
+  useEffect(() => { setLocalGridSize(gridSize); }, [gridSize]);
   const [fillCount, setFillCount] = useState(1000);
   const [churnRate, setChurnRate] = useState(0); // ops per tick (0 = off)
   const [fps, setFps] = useState(0);
@@ -170,11 +174,12 @@ export default function StatusBar() {
             min="10"
             max="100"
             step="10"
-            value={gridSize}
-            onChange={(e) => setGridSize(parseInt(e.target.value))}
+            value={localGridSize}
+            onChange={(e) => setLocalGridSize(Number(e.target.value))}
+            onPointerUp={() => setStoreGridSize(localGridSize)}
             className="w-24 accent-blue-500"
           />
-          <span className="text-xs font-mono w-8">{gridSize}</span>
+          <span className="text-xs font-mono w-8">{localGridSize}</span>
         </div>
         <span className="text-gray-500">Stress</span>
         <input

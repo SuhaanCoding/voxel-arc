@@ -111,7 +111,7 @@ export default function AIGenerator() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: fullPrompt, forceRoute: routePref }),
+        body: JSON.stringify({ prompt: fullPrompt, forceRoute: routePref, gridSize }),
       });
 
       const data = await res.json();

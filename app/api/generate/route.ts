@@ -3,40 +3,40 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const ROUTER_PROMPT = `You are a strict routing classifier for a voxel editor's AI pipeline.
 
-Given a user's text description of an object, classify it into exactly one route:
+Given a user's text description of an object, classify it into exactly one route.
 
-1. PROCEDURAL - ONLY for extreme low-poly primitives, very simple structures (<50 voxels), mathematical functions, or code snippets.
-   - Valid: "a red 5x5 cube", "a simple pyramid", "y = sin(x) + cos(z)", "console.log('hello')"
-   - INVALID: "a car", "a guitar", "a human" (These are too complex for raw coordinate generation).
+1. PROCEDURAL - The DEFAULT route for >=80% of requests. Use this for ANY environment, landscape, building, architectural structure, geometric shape, abstract concept, complex multi-part object, or anything that can realistically be modeled mathematically via JavaScript \`for\` loops and \`Math\` functions.
+   - Valid: "a dense pine forest", "a modern city block", "a huge medieval castle", "a futuristic spaceship layout", "a long suspension bridge", "a winding river".
 
-2. SEARCH - The DEFAULT route for >=90% of requests. Use this for ANY real-world, tangible noun.
-   - Valid: "a rusty old sports car", "a grand piano", "a fluffy dog", "a modern house"
-   - Your job: Extract ONLY the 1-2 core keywords for the API search (e.g., "sports car", "piano").
+2. SEARCH - ONLY for simple, atomic, singular tangible nouns that are highly likely to exist as a single distinct prop on a stock 3D model site. Do NOT use this for scenes or environments!
+   - Valid: "a coffee mug", "a standard office chair", "a specific car model", "a fire hydrant".
+   - Your job: Extract ONLY the 1-2 core keywords for the API search (e.g., "coffee mug", "chair").
 
-3. GENERATE - ONLY for highly imaginative, fictional, or impossible objects that definitely will not exist on a stock 3D model site.
-   - Valid: "a dragon wearing a top hat and sunglasses", "a cyberpunk skyscraper made of jelly".
+3. GENERATE - An extreme LAST RESORT. ONLY for hyper-complex, highly specific, surreal, or impossible singular models that cannot be algorithmically generated and are guaranteed not to exist on stock sites. Avoid this if possible.
+   - Valid: "a bizarre alien creature with 7 arms riding a unicycle".
 
 4. REJECT - Use this if the prompt is completely nonsensical or violates safety guidelines.
 
 Respond with ONLY a JSON object:
 {"route": "PROCEDURAL"|"SEARCH"|"GENERATE"|"REJECT", "keywords": "search terms for Poly Pizza (null if not SEARCH)", "reasoning": "one sentence explanation"}`;
 
-const PROCEDURAL_PROMPT = `You are a procedural 3D architect. The user wants a 3D structure.
+function getProceduralPrompt(gridSize: number) {
+  return `You are a procedural 3D architect. The user wants a 3D structure.
 Do NOT generate a JSON array of coordinates.
 Generate ONLY a pure JavaScript code snippet that builds the shape.
 
 Rules:
 - You have access to one function: \`place(x, y, z, color, material)\`
-- The grid is from x=0 to 49, y=0 to 49, z=0 to 49. y=0 is the ground.
+- The grid is from x=0 to ${gridSize - 1}, y=0 to ${gridSize - 1}, z=0 to ${gridSize - 1}. y=0 is the ground.
 - Use realistic hex colors.
 - Use standard JavaScript \`for\` loops and \`Math\` functions.
 - Output ONLY the raw JavaScript code. No markdown, no backticks, no explanations.
 
 Example for a red surface wave:
-for (let x = 0; x < 50; x++) {
-  for (let z = 0; z < 50; z++) {
+for (let x = 0; x < ${gridSize}; x++) {
+  for (let z = 0; z < ${gridSize}; z++) {
     let y = 10 + Math.sin(x / 3) * 5 + Math.cos(z / 3) * 5;
-    if (y >= 0 && y < 50) {
+    if (y >= 0 && y < ${gridSize}) {
       place(x, Math.floor(y), z, "#cc0000");
     }
   }
@@ -56,6 +56,7 @@ for (let y = 3; y <= 6; y++) {
     place(10, y, z, "#88ccff");
   }
 }`;
+}
 
 // --- Router ---
 async function routePrompt(client: Anthropic, prompt: string) {
@@ -86,11 +87,11 @@ async function extractKeywords(client: Anthropic, prompt: string) {
 }
 
 // --- Bucket A: PROCEDURAL ---
-async function handleProcedural(client: Anthropic, prompt: string) {
+async function handleProcedural(client: Anthropic, prompt: string, gridSize: number) {
   const message = await client.messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 2000,
-    system: PROCEDURAL_PROMPT,
+    system: getProceduralPrompt(gridSize),
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -242,6 +243,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const prompt = body.prompt;
     const forceRoute = body.forceRoute as "AUTO" | "PROCEDURAL" | "SEARCH" | "GENERATE" | undefined;
+    const gridSize = typeof body.gridSize === "number" ? body.gridSize : 50;
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
@@ -303,7 +305,7 @@ export async function POST(req: NextRequest) {
     }
 
     // PROCEDURAL (default / fallback)
-    const result = await handleProcedural(client, prompt.trim());
+    const result = await handleProcedural(client, prompt.trim(), gridSize);
     return NextResponse.json({ route: route === "PROCEDURAL" ? route : `${route}→PROCEDURAL`, reasoning, ...result });
 
   } catch (err) {
