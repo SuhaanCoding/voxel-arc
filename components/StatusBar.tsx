@@ -2,13 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useVoxelStore, toKey, VoxelKey } from "@/lib/store";
-
-function randomHexColor(): string {
-  const r = Math.floor(Math.random() * 256);
-  const g = Math.floor(Math.random() * 256);
-  const b = Math.floor(Math.random() * 256);
-  return "#" + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
-}
+import { randomHexColor } from "@/lib/constants";
 
 export default function StatusBar() {
   const voxelCount = useVoxelStore((s) => s.voxels.size);
@@ -142,13 +136,13 @@ export default function StatusBar() {
         </div>
 
         {/* 2. Dimensions */}
-        <div className="text-[#e2e2e8] text-sm font-medium">
+        <div className="text-[#e2e2e8] text-sm font-medium text-center shrink-0 w-[100px] tabular-nums">
           {gridSize}&times;{gridSize}&times;{gridSize}
         </div>
 
-        {/* 3. Voxel Count */}
-        <div className="flex flex-col text-[#e2e2e8] text-xs leading-none mr-2 w-[52px]">
-          <span className="font-medium text-sm">{voxelCount >= 1000 ? `${(voxelCount / 1000).toFixed(1)}k` : voxelCount}</span>
+        {/* 3. Voxel Count — fixed width to prevent bar jitter */}
+        <div className="flex flex-col text-[#e2e2e8] text-xs leading-none shrink-0 w-[40px]">
+          <span className="font-medium text-sm tabular-nums">{voxelCount >= 1000 ? `${(voxelCount / 1000).toFixed(1)}k` : voxelCount}</span>
           <span className="text-[#808090]">voxels</span>
         </div>
 
@@ -177,41 +171,42 @@ export default function StatusBar() {
         <div className="w-[1px] h-4 bg-[#3a3a48]"></div>
 
         {/* 5. Stress Test & FPS */}
-        <div className="flex items-center gap-4 w-[240px]">
-          <span style={{ color: fps >= 50 ? "#10b981" : fps >= 30 ? "#facc15" : "#ef4444", fontWeight: "600" }} className="text-sm w-[56px]">
+        <div className="flex items-center gap-4 shrink-0">
+          {/* Fixed width to prevent bar jitter from changing FPS digits */}
+          <span style={{ color: fps >= 50 ? "#10b981" : fps >= 30 ? "#facc15" : "#ef4444", fontWeight: "600" }} className="text-sm shrink-0 w-[52px] tabular-nums">
             {fps} FPS
           </span>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setChurnRate(isStressActive ? 0 : 50)}
-              className={`text-sm transition-colors ${isStressActive ? "text-[#ef4444] font-medium" : "text-[#e2e2e8] hover:text-white"
+              className={`text-xs px-3 py-1 rounded-md border transition-colors shrink-0 text-center ${isStressActive
+                ? "bg-[#3b1520] border-[#ef4444] text-[#ef4444] font-medium"
+                : "bg-[#2a2a35] border-[#3a3a48] text-[#e2e2e8] hover:bg-[#333340] hover:text-white"
                 }`}
             >
-              Stress test
+              {isStressActive ? "Stop" : "Stress test"}
             </button>
-            <div className="w-[72px]">
-              {isStressActive && (
-                <input
-                  type="range"
-                  min={10}
-                  max={500}
-                  step={10}
-                  value={churnRate}
-                  onChange={(e) => setChurnRate(Number(e.target.value))}
-                  className="w-full cursor-pointer"
-                  style={{ accentColor: "#ef4444" }}
-                  title="Churn Rate"
-                />
-              )}
-            </div>
+            {isStressActive && (
+              <input
+                type="range"
+                min={10}
+                max={500}
+                step={10}
+                value={churnRate}
+                onChange={(e) => setChurnRate(Number(e.target.value))}
+                className="w-16 cursor-pointer"
+                style={{ accentColor: "#ef4444" }}
+                title="Churn Rate"
+              />
+            )}
           </div>
         </div>
 
         {/* Separator */}
         <div className="w-[1px] h-4 bg-[#3a3a48]"></div>
 
-        {/* 6. Fill / Cancel */}
-        <div className="flex items-center gap-3 w-[200px]">
+        {/* 6. Fill / Clear */}
+        <div className="flex items-center gap-3 shrink-0">
           <input
             type="range"
             min={100}
@@ -223,22 +218,21 @@ export default function StatusBar() {
             style={{ accentColor: "#e2e2e8" }}
             title="Fill Amount"
           />
-          <span className="text-[#808090] text-sm w-8 text-right">
+          <span className="text-[#808090] text-sm shrink-0 text-right tabular-nums w-[36px]">
             {fillCount >= 1000 ? `${(fillCount / 1000).toFixed(0)}k` : fillCount}
           </span>
-          <div className="flex items-center gap-1.5 ml-1">
+          <div className="flex items-center gap-2">
             <button
               onClick={handleRandomFill}
-              className="text-sm text-[#e2e2e8] hover:text-white transition-colors"
+              className="text-xs px-3 py-1 rounded-md border bg-[#2a2a35] border-[#3a3a48] text-[#e2e2e8] hover:bg-[#333340] hover:text-white transition-colors"
             >
               Fill
             </button>
-            <span className="text-[#808090]">/</span>
             <button
               onClick={handleClear}
-              className="text-sm text-[#808090] hover:text-[#e2e2e8] transition-colors"
+              className="text-xs px-3 py-1 rounded-md border bg-[#2a2a35] border-[#3a3a48] text-[#808090] hover:bg-[#333340] hover:text-[#e2e2e8] transition-colors"
             >
-              cancel
+              Clear
             </button>
           </div>
         </div>

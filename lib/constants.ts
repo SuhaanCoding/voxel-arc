@@ -5,6 +5,13 @@ export const MAX_INSTANCES = 125000;
 
 export const DEFAULT_COLOR = "#4a90d9";
 
+export function randomHexColor(): string {
+  const r = Math.floor(Math.random() * 256);
+  const g = Math.floor(Math.random() * 256);
+  const b = Math.floor(Math.random() * 256);
+  return "#" + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+}
+
 export const COLOR_PALETTE = [
   // Neutrals 
   "#ffffff", "#9ca3af", "#4b5563", "#1e1e24", "#0a0a0f",

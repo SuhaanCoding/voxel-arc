@@ -24,6 +24,7 @@ interface VoxelStore {
   mirrorAxes: { x: boolean; y: boolean; z: boolean };
   showWireframe: boolean;
   showAIPanel: boolean;
+  showHelp: boolean;
   selectedVoxels: Set<VoxelKey>;
   undoStack: VoxelCommand[];
   redoStack: VoxelCommand[];
@@ -39,6 +40,7 @@ interface VoxelStore {
   setGridSize: (size: number) => void;
   toggleWireframe: () => void;
   toggleAIPanel: () => void;
+  toggleHelp: () => void;
 
   selectVoxel: (key: VoxelKey, additive: boolean) => void;
   deselectAll: () => void;
@@ -62,6 +64,7 @@ export const useVoxelStore = create(
     mirrorAxes: { x: false, y: false, z: false },
     showWireframe: false,
     showAIPanel: false,
+    showHelp: false,
     selectedVoxels: new Set(),
     undoStack: [],
     redoStack: [],
@@ -152,6 +155,10 @@ export const useVoxelStore = create(
 
     toggleAIPanel: () => {
       set((state) => { state.showAIPanel = !state.showAIPanel; });
+    },
+
+    toggleHelp: () => {
+      set((state) => { state.showHelp = !state.showHelp; });
     },
 
     selectVoxel: (key, additive) => {

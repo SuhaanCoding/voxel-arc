@@ -7,6 +7,7 @@ import ColorPalette from "@/components/ColorPalette";
 import StatusBar from "@/components/StatusBar";
 import SelectionPanel from "@/components/SelectionPanel";
 import AIGenerator from "@/components/AIGenerator";
+import HelpOverlay from "@/components/HelpOverlay";
 import { useVoxelStore } from "@/lib/store";
 
 const VoxelCanvas = dynamic(() => import("@/components/VoxelCanvas"), {
@@ -17,6 +18,12 @@ function AIOverlay() {
   const show = useVoxelStore((s) => s.showAIPanel);
   if (!show) return null;
   return <AIGenerator />;
+}
+
+function HelpOverlayWrapper() {
+  const show = useVoxelStore((s) => s.showHelp);
+  if (!show) return null;
+  return <HelpOverlay />;
 }
 
 function ModeIndicator() {
@@ -74,16 +81,13 @@ export default function Home() {
           <ModeIndicator />
           <SelectionPanel />
           <AIOverlay />
+          <HelpOverlayWrapper />
 
           {/* Viewport Overlay — Legend Text */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none text-[#505060] font-mono text-[11px] bg-[#111116]/80 px-4 py-1.5 rounded-full backdrop-blur-sm border border-[#2a2a35]/50">
-            LMB: Action &nbsp;&nbsp; RMB: Rotate &nbsp;&nbsp; Scroll: Zoom &nbsp;&nbsp; MMB: Pan
+            Press H for controls
           </div>
 
-          {/* Compass Indicator */}
-          <div className="absolute top-4 right-4 w-11 h-11 bg-[#22222d] border border-[#333340] rounded-full flex flex-col items-center justify-center pointer-events-none shadow-md">
-            <span className="text-[#a0a0b0] font-bold text-sm leading-none">N</span>
-          </div>
         </div>
         <ColorPalette />
       </div>
