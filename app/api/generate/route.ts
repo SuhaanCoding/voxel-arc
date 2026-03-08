@@ -27,7 +27,8 @@ Generate ONLY a pure JavaScript code snippet that builds the shape.
 
 Rules:
 - You have access to one function: \`place(x, y, z, color, material)\`
-- The grid is from x=0 to ${gridSize - 1}, y=0 to ${gridSize - 1}, z=0 to ${gridSize - 1}. y=0 is the ground.
+- The grid is from x=0 to ${gridSize - 1}, y=0 to ${gridSize - 1}, z=0 to ${gridSize - 1}. y=0 is the ground. The grid size is ${gridSize}.
+- CRITICAL: Structures must fill most of the grid. Define a variable \`const S = ${gridSize};\` and compute all positions as fractions of S (e.g. \`Math.floor(S * 0.2)\`). Never use small hard-coded ranges like 0-10.
 - Use realistic hex colors.
 - Use standard JavaScript \`for\` loops and \`Math\` functions.
 - Output ONLY the raw JavaScript code. No markdown, no backticks, no explanations.
@@ -42,18 +43,38 @@ for (let x = 0; x < ${gridSize}; x++) {
   }
 }
 
+IMPORTANT: Always use the FULL grid. Define dimensions relative to the grid size. For example, use variables like:
+const S = ${gridSize}; // grid size
+Then base all coordinates on S so the structure fills most of the available space.
+
 Example for a house:
+const S = ${gridSize};
+const wallMinX = Math.floor(S * 0.2);
+const wallMaxX = Math.floor(S * 0.8);
+const wallMinZ = Math.floor(S * 0.2);
+const wallMaxZ = Math.floor(S * 0.8);
+const wallHeight = Math.floor(S * 0.4);
 // walls
-for (let x = 10; x <= 20; x++) {
-  for (let y = 0; y <= 8; y++) {
-    place(x, y, 10, "#aa8866");
-    place(x, y, 20, "#aa8866");
+for (let x = wallMinX; x <= wallMaxX; x++) {
+  for (let y = 0; y <= wallHeight; y++) {
+    place(x, y, wallMinZ, "#aa8866");
+    place(x, y, wallMaxZ, "#aa8866");
+  }
+}
+for (let z = wallMinZ; z <= wallMaxZ; z++) {
+  for (let y = 0; y <= wallHeight; y++) {
+    place(wallMinX, y, z, "#aa8866");
+    place(wallMaxX, y, z, "#aa8866");
   }
 }
 // window
-for (let y = 3; y <= 6; y++) {
-  for (let z = 13; z <= 17; z++) {
-    place(10, y, z, "#88ccff");
+const winMinY = Math.floor(wallHeight * 0.3);
+const winMaxY = Math.floor(wallHeight * 0.7);
+const winMinZ = Math.floor(S * 0.35);
+const winMaxZ = Math.floor(S * 0.65);
+for (let y = winMinY; y <= winMaxY; y++) {
+  for (let z = winMinZ; z <= winMaxZ; z++) {
+    place(wallMinX, y, z, "#88ccff");
   }
 }`;
 }
@@ -90,7 +111,7 @@ async function extractKeywords(client: Anthropic, prompt: string) {
 async function handleProcedural(client: Anthropic, prompt: string, gridSize: number) {
   const message = await client.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 2000,
+    max_tokens: 4096,
     system: getProceduralPrompt(gridSize),
     messages: [{ role: "user", content: prompt }],
   });
@@ -100,9 +121,21 @@ async function handleProcedural(client: Anthropic, prompt: string, gridSize: num
 
   let rawCode = text.text.trim();
 
-  // Strip markdown formatting if Claude disobeys
-  if (rawCode.startsWith("```")) {
+  // Strip markdown formatting if Claude disobeys — handle code blocks anywhere in response
+  const codeBlockMatch = rawCode.match(/```(?:javascript|js)?\n([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    rawCode = codeBlockMatch[1].trim();
+  } else if (rawCode.startsWith("```")) {
+    // Opening fence but no closing fence (truncated output)
     rawCode = rawCode.replace(/^```[a-z]*\n/, "").replace(/\n```$/, "");
+  }
+
+  // Detect truncated code: check if braces/parens are balanced
+  const opens = (rawCode.match(/[{(]/g) || []).length;
+  const closes = (rawCode.match(/[})]/g) || []).length;
+  if (opens > closes) {
+    // Close any unclosed braces/parens so the code can at least execute
+    rawCode += "\n" + "}".repeat(opens - closes);
   }
 
   // Return the type as 'code' so the frontend knows what to do
