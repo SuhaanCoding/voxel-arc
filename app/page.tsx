@@ -19,10 +19,44 @@ function AIOverlay() {
   return <AIGenerator />;
 }
 
+function ModeIndicator() {
+  const activeMode = useVoxelStore((s) => s.activeMode);
+  const activeBrush = useVoxelStore((s) => s.activeBrush);
+
+  let label: string;
+  let hint: string;
+
+  if (activeMode === "attach") {
+    if (activeBrush === "voxel") {
+      label = "Place";
+      hint = "Click a surface to add a single voxel";
+    } else if (activeBrush === "box") {
+      label = "Box Fill";
+      hint = "Drag across a surface to fill a volume";
+    } else {
+      label = "Face Extrude";
+      hint = "Click a face to push out the matching surface";
+    }
+  } else {
+    label = "Select";
+    hint = "Click to select · Shift+click to multi-select · Drag to move · Del to remove";
+  }
+
+  return (
+    <div className="absolute top-4 left-4 pointer-events-none z-10 flex items-center gap-3">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: "#22222d", border: "1px solid #2a2a35" }}>
+        <div className="w-2 h-2 rounded-full" style={{ background: "#3b82f6" }} />
+        <span className="text-sm font-medium text-[#e2e2e8]">{label}</span>
+      </div>
+      <span className="text-xs font-mono text-[#505060]">{hint}</span>
+    </div>
+  );
+}
+
 export default function Home() {
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden" style={{ background: "#1a1a1a" }}>
-      <div className="flex flex-1 overflow-hidden">
+    <div className="flex flex-col h-screen w-screen overflow-hidden" style={{ background: "#111116" }}>
+      <div className="flex flex-1 overflow-hidden relative">
         <Toolbar />
         <div
           className="flex-1 h-full relative"
@@ -30,15 +64,26 @@ export default function Home() {
         >
           <Suspense
             fallback={
-              <div className="flex h-full items-center justify-center text-gray-400" style={{ background: "#1a1a1a" }}>
+              <div className="flex h-full items-center justify-center text-gray-400" style={{ background: "#111116" }}>
                 Loading 3D editor...
               </div>
             }
           >
             <VoxelCanvas />
           </Suspense>
+          <ModeIndicator />
           <SelectionPanel />
           <AIOverlay />
+
+          {/* Viewport Overlay — Legend Text */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none text-[#505060] font-mono text-[11px] bg-[#111116]/80 px-4 py-1.5 rounded-full backdrop-blur-sm border border-[#2a2a35]/50">
+            LMB: Action &nbsp;&nbsp; RMB: Rotate &nbsp;&nbsp; Scroll: Zoom &nbsp;&nbsp; MMB: Pan
+          </div>
+
+          {/* Compass Indicator */}
+          <div className="absolute top-4 right-4 w-11 h-11 bg-[#22222d] border border-[#333340] rounded-full flex flex-col items-center justify-center pointer-events-none shadow-md">
+            <span className="text-[#a0a0b0] font-bold text-sm leading-none">N</span>
+          </div>
         </div>
         <ColorPalette />
       </div>

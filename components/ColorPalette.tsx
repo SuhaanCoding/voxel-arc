@@ -9,22 +9,48 @@ export default function ColorPalette() {
 
   return (
     <div
-      className="h-full overflow-y-auto flex flex-col items-center py-2 gap-1 select-none"
-      style={{ background: "#2a2a2a", width: 60 }}
+      className="h-full overflow-y-auto overflow-x-hidden flex flex-col items-center py-4 gap-[6px] select-none shrink-0 border-l custom-scrollbar"
+      style={{ background: "#111116", width: 64, borderColor: "#2a2a35" }}
     >
-      {/* Color swatches */}
-      {COLOR_PALETTE.map((color) => (
-        <button
-          key={color}
-          onClick={() => setActiveColor(color)}
-          title={color}
-          style={{ backgroundColor: color, width: 40, height: 40, flexShrink: 0 }}
-          className={`rounded transition-all ${activeColor === color
-              ? "ring-2 ring-white ring-offset-1 ring-offset-[#2a2a2a]"
-              : "hover:ring-1 hover:ring-gray-400"
-            }`}
+      {/* Active Color Preview */}
+      <div className="mb-2 flex justify-center">
+        <div
+          className="rounded-lg transition-all duration-200 ease-out"
+          style={{
+            backgroundColor: activeColor,
+            width: 36,
+            height: 36,
+            border: "2px solid #444455",
+            boxShadow: `0 0 16px ${activeColor}44`
+          }}
+          title="Current Color"
         />
-      ))}
+      </div>
+
+      <div className="w-[32px] h-[1px] bg-[#2a2a35] mb-2" />
+
+      {/* Color swatches */}
+      {COLOR_PALETTE.map((color) => {
+        const isActive = activeColor === color;
+        return (
+          <button
+            key={color}
+            onClick={() => setActiveColor(color)}
+            title={color}
+            className="rounded-md transition-all duration-150 ease-out relative"
+            style={{
+              backgroundColor: color,
+              width: 30,
+              height: 30,
+              flexShrink: 0,
+              transform: isActive ? "scale(1.1)" : "scale(1)",
+              border: isActive ? "2px solid white" : "1px solid #2a2a35",
+              boxShadow: isActive ? `0 0 12px ${color}66` : "none",
+              zIndex: isActive ? 10 : 1
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

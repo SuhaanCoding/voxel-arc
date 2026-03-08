@@ -64,6 +64,13 @@ export default function VoxelRenderer() {
   const isBoxDragging = useRef(false);
   const boxPreviewRef = useRef<Mesh>(null);
 
+  // Voxel brush (continuous painting) state
+  const isVoxelBrushing = useRef(false);
+  const voxelBrushPending = useRef(false);
+  const voxelBrushPendingPos = useRef<[number, number, number]>([0, 0, 0]);
+  const voxelBrushCount = useRef(0);
+  const voxelBrushDidDrag = useRef(false);
+
   const { camera, gl } = useThree();
   const gridSize = useVoxelStore((s) => s.gridSize);
 
@@ -240,6 +247,37 @@ export default function VoxelRenderer() {
         return;
       }
 
+      // Voxel brush: detect drag threshold to activate continuous brushing
+      if (voxelBrushPending.current && activeBrush === "voxel" && !isVoxelBrushing.current) {
+        const dx = e.nativeEvent.clientX - pointerDownPos.current.x;
+        const dy = e.nativeEvent.clientY - pointerDownPos.current.y;
+        if (Math.sqrt(dx * dx + dy * dy) > 5) {
+          // Activate continuous brushing — place the pending first voxel
+          isVoxelBrushing.current = true;
+          voxelBrushDidDrag.current = true;
+          const [ppx, ppy, ppz] = voxelBrushPendingPos.current;
+          if (!store.voxels.has(toKey(ppx, ppy, ppz))) {
+            placeWithMirror([[ppx, ppy, ppz]], activeColor);
+            voxelBrushCount.current++;
+          }
+        }
+      }
+
+      // Continuous voxel brush: place while dragging
+      if (isVoxelBrushing.current && activeBrush === "voxel") {
+        const placeKey = toKey(nx, ny, nz);
+        if (!store.voxels.has(placeKey)) {
+          placeWithMirror([[nx, ny, nz]], activeColor);
+          voxelBrushCount.current++;
+        }
+        hoveredRef.current = { key: placeKey, position: [nx, ny, nz] };
+        ghost.position.set(nx, ny, nz);
+        ghost.visible = true;
+        faceGhost.visible = false;
+        lastHitRef.current = { instanceId: e.instanceId, hitType: "voxel", meshObject: e.object };
+        return;
+      }
+
       if (activeBrush === "face") {
         let commands = faceExtrudeCommands(key, [Math.round(normal.x), Math.round(normal.y), Math.round(normal.z)], store.voxels, gridSize);
         if (store.mirrorAxes.x || store.mirrorAxes.y || store.mirrorAxes.z) {
@@ -296,7 +334,7 @@ export default function VoxelRenderer() {
     const faceGhost = faceGhostRef.current;
     if (!ghost || !faceGhost) return;
 
-    const { activeMode, activeColor } = useVoxelStore.getState();
+    const { activeMode, activeColor, activeBrush } = useVoxelStore.getState();
     if (activeMode !== "attach") return;
 
     const x = Math.floor(e.point.x + 0.5);
@@ -314,6 +352,33 @@ export default function VoxelRenderer() {
       faceGhost.visible = false;
       hoveredRef.current = null;
       lastHitRef.current = null;
+      return;
+    }
+
+    // Voxel brush: detect drag threshold on ground
+    if (voxelBrushPending.current && activeBrush === "voxel" && !isVoxelBrushing.current) {
+      const dx = e.nativeEvent.clientX - pointerDownPos.current.x;
+      const dy = e.nativeEvent.clientY - pointerDownPos.current.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+        isVoxelBrushing.current = true;
+        voxelBrushDidDrag.current = true;
+        const [ppx, ppy, ppz] = voxelBrushPendingPos.current;
+        if (!useVoxelStore.getState().voxels.has(toKey(ppx, ppy, ppz))) {
+          placeWithMirror([[ppx, ppy, ppz]], activeColor);
+          voxelBrushCount.current++;
+        }
+      }
+    }
+
+    // Continuous voxel brush on ground
+    if (isVoxelBrushing.current && activeBrush === "voxel") {
+      placeWithMirror([[x, 0, z]], activeColor);
+      voxelBrushCount.current++;
+      hoveredRef.current = { key: gKey, position: [x, 0, z] };
+      ghost.position.set(x, 0, z);
+      ghost.visible = true;
+      faceGhost.visible = false;
+      lastHitRef.current = { hitType: "ground", meshObject: e.object };
       return;
     }
 
@@ -345,7 +410,12 @@ export default function VoxelRenderer() {
       return;
     }
 
-    // Attach mode
+    // Attach mode — skip if voxel brush drag just finished
+    if (voxelBrushDidDrag.current) {
+      voxelBrushDidDrag.current = false;
+      return;
+    }
+
     const [x, y, z] = parseKey(key);
     const normal = e.face?.normal;
     if (!normal) return;
@@ -386,6 +456,10 @@ export default function VoxelRenderer() {
 
     const { activeMode, activeColor } = useVoxelStore.getState();
     if (activeMode !== "attach") return;
+    if (voxelBrushDidDrag.current) {
+      voxelBrushDidDrag.current = false;
+      return;
+    }
 
     const x = Math.floor(e.point.x + 0.5);
     const z = Math.floor(e.point.z + 0.5);
@@ -400,6 +474,15 @@ export default function VoxelRenderer() {
     pointerDownPos.current = { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY };
 
     const store = useVoxelStore.getState();
+
+    // Voxel brush — record pending (don't place yet, wait for click vs drag)
+    if (store.activeMode === "attach" && store.activeBrush === "voxel" && hoveredRef.current) {
+      voxelBrushPending.current = true;
+      voxelBrushPendingPos.current = hoveredRef.current.position;
+      isVoxelBrushing.current = false;
+      voxelBrushDidDrag.current = false;
+      voxelBrushCount.current = 0;
+    }
 
     // Box brush start
     if (store.activeMode === "attach" && store.activeBrush === "box" && hoveredRef.current) {
@@ -417,7 +500,7 @@ export default function VoxelRenderer() {
         dragOffset.current = [0, 0, 0];
       }
     }
-  }, []);
+  }, [placeWithMirror]);
 
   // Pointer down on ground — for box brush start
   const onGroundPointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
@@ -425,16 +508,25 @@ export default function VoxelRenderer() {
     pointerDownPos.current = { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY };
 
     const store = useVoxelStore.getState();
+
+    // Voxel brush — record pending on ground
+    if (store.activeMode === "attach" && store.activeBrush === "voxel" && hoveredRef.current) {
+      voxelBrushPending.current = true;
+      voxelBrushPendingPos.current = hoveredRef.current.position;
+      isVoxelBrushing.current = false;
+      voxelBrushCount.current = 0;
+    }
+
     if (store.activeMode === "attach" && store.activeBrush === "box" && hoveredRef.current) {
       boxBrushStart.current = hoveredRef.current.position;
       boxBrushEnd.current = hoveredRef.current.position;
       isBoxDragging.current = false;
     }
-  }, []);
+  }, [placeWithMirror]);
 
   const onPointerOut = useCallback(() => {
     const ghost = ghostRef.current;
-    if (ghost && !isBoxDragging.current && !isDragging.current) {
+    if (ghost && !isBoxDragging.current && !isDragging.current && !isVoxelBrushing.current) {
       ghost.visible = false;
       if (faceGhostRef.current) faceGhostRef.current.visible = false;
       lastHitRef.current = null;
@@ -517,10 +609,8 @@ export default function VoxelRenderer() {
     }
   });
 
-  // Window-level handlers — ONLY for drag detection, box brush completion, selection move, right-click erase
+  // Window-level handlers — drag detection, box brush completion, selection move
   useEffect(() => {
-    const rightClickDownPos = { x: 0, y: 0 };
-
     const onWindowMove = (e: PointerEvent) => {
       // Update drag NDC for useFrame drag ghost raycasting
       const canvas = gl.domElement;
@@ -573,15 +663,37 @@ export default function VoxelRenderer() {
       }
     };
 
-    const onWindowDown = (e: PointerEvent) => {
-      if (e.button === 2) {
-        rightClickDownPos.x = e.clientX;
-        rightClickDownPos.y = e.clientY;
-      }
-    };
-
     const onWindowUp = (e: PointerEvent) => {
       if (e.button === 0) {
+        // Voxel brush completion
+        if (isVoxelBrushing.current || voxelBrushPending.current) {
+          const wasBrushing = isVoxelBrushing.current;
+          isVoxelBrushing.current = false;
+          voxelBrushPending.current = false;
+
+          if (wasBrushing) {
+            // Consolidate undo stack into single BATCH
+            const count = voxelBrushCount.current;
+            if (count > 1) {
+              const store = useVoxelStore.getState();
+              const popped: VoxelCommand[] = [];
+              for (let i = 0; i < count && store.undoStack.length > 0; i++) {
+                const cmd = store.undoStack.pop()!;
+                if (cmd.type === "BATCH") {
+                  popped.push(...cmd.commands);
+                } else {
+                  popped.push(cmd);
+                }
+              }
+              popped.reverse();
+              if (popped.length > 0) {
+                store.undoStack.push({ type: "BATCH", commands: popped });
+              }
+            }
+          }
+          voxelBrushCount.current = 0;
+        }
+
         // Box brush completion
         if (isBoxDragging.current && boxBrushStart.current && boxBrushEnd.current) {
           const store = useVoxelStore.getState();
@@ -639,42 +751,11 @@ export default function VoxelRenderer() {
         dragStartKey.current = null;
       }
 
-      // Right-click delete (only if no drag / orbit)
-      if (e.button === 2) {
-        const dx = e.clientX - rightClickDownPos.x;
-        const dy = e.clientY - rightClickDownPos.y;
-        if (Math.sqrt(dx * dx + dy * dy) <= 5) {
-          const store = useVoxelStore.getState();
-          if (store.activeMode === "select") {
-            const hitInfo = lastHitRef.current;
-            if (hitInfo?.hitType === "voxel" && hitInfo.instanceId !== undefined && hitInfo.meshObject) {
-              const key = indexToKeyRef.current[hitInfo.instanceId];
-              if (key) {
-                const [ex, ey, ez] = parseKey(key);
-                const positions = getMirroredPositions([[ex, ey, ez]], store.mirrorAxes, gridSize);
-                const removeCommands: VoxelCommand[] = [];
-                for (const [mx, my, mz] of positions) {
-                  const mk = toKey(mx, my, mz);
-                  const prevColor = store.voxels.get(mk);
-                  if (prevColor) removeCommands.push({ type: "REMOVE" as const, key: mk, previousColor: prevColor });
-                }
-                if (removeCommands.length === 1) {
-                  store.removeVoxel(key);
-                } else if (removeCommands.length > 1) {
-                  store.executeBatch(removeCommands);
-                }
-              }
-            }
-          }
-        }
-      }
     };
 
-    window.addEventListener("pointerdown", onWindowDown, true);
     window.addEventListener("pointermove", onWindowMove, true);
     window.addEventListener("pointerup", onWindowUp, true);
     return () => {
-      window.removeEventListener("pointerdown", onWindowDown, true);
       window.removeEventListener("pointermove", onWindowMove, true);
       window.removeEventListener("pointerup", onWindowUp, true);
     };

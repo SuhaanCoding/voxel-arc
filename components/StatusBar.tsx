@@ -16,19 +16,17 @@ export default function StatusBar() {
   const setStoreGridSize = useVoxelStore((s) => s.setGridSize);
   const [localGridSize, setLocalGridSize] = useState(gridSize);
 
-  // Sync if store changes externally
   useEffect(() => { setLocalGridSize(gridSize); }, [gridSize]);
   const [fillCount, setFillCount] = useState(1000);
-  const [churnRate, setChurnRate] = useState(0); // ops per tick (0 = off)
+  const [churnRate, setChurnRate] = useState(0);
   const [fps, setFps] = useState(0);
   const framesRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
   const churnRef = useRef(0);
 
-  // Keep churnRef in sync
   useEffect(() => { churnRef.current = churnRate; }, [churnRate]);
 
-  // FPS counter — updates every 250ms for snappier readout
+  // FPS counter
   useEffect(() => {
     let rafId: number;
     const tick = () => {
@@ -46,7 +44,7 @@ export default function StatusBar() {
     return () => cancelAnimationFrame(rafId);
   }, []);
 
-  // Stress test churn loop — adds and removes random voxels every frame
+  // Stress test churn loop
   useEffect(() => {
     let rafId: number;
     const churnTick = () => {
@@ -56,10 +54,7 @@ export default function StatusBar() {
         const voxels = store.voxels;
         const keys = Array.from(voxels.keys());
 
-        // Build a new map: copy existing, remove some, add some
         const newMap = new Map(voxels);
-
-        // Delete ~half the rate worth of random existing voxels
         const toRemove = Math.min(Math.floor(rate / 2), keys.length);
         for (let i = 0; i < toRemove; i++) {
           const idx = Math.floor(Math.random() * keys.length);
@@ -68,7 +63,6 @@ export default function StatusBar() {
           keys.pop();
         }
 
-        // Add ~half the rate worth of new random voxels
         const toAdd = Math.ceil(rate / 2);
         for (let i = 0; i < toAdd; i++) {
           const x = Math.floor(Math.random() * gridSize);
@@ -83,15 +77,13 @@ export default function StatusBar() {
     };
     rafId = requestAnimationFrame(churnTick);
     return () => cancelAnimationFrame(rafId);
-  }, [gridSize]); // Added gridSize to dependencies for churnTick
+  }, [gridSize]);
 
   const handleRandomFill = useCallback(() => {
-    // 1. Calculate max voxels based on current grid size
     const maxVoxels = gridSize * gridSize * gridSize;
     const requested = Math.min(fillCount, maxVoxels);
     if (requested <= 0) return;
 
-    // 2. Generate positions within current bounds
     const positions = new Set<string>();
     while (positions.size < requested) {
       const x = Math.floor(Math.random() * gridSize);
@@ -106,7 +98,7 @@ export default function StatusBar() {
     }
 
     useVoxelStore.getState().loadScene(entries);
-  }, [fillCount, gridSize]); // Added gridSize to dependencies
+  }, [fillCount, gridSize]);
 
   const clampFillCount = (val: number) => {
     const maxVoxels = gridSize * gridSize * gridSize;
@@ -118,58 +110,25 @@ export default function StatusBar() {
   }, []);
 
   const maxVoxels = gridSize * gridSize * gridSize;
+  const isStressActive = churnRate > 0;
+
+  const activeColor = useVoxelStore((s) => s.activeColor);
+  const setActiveColor = useVoxelStore((s) => s.setActiveColor);
 
   return (
-    <div className="absolute bottom-4 left-4 right-4 bg-gray-900/90 text-white p-3 rounded-lg shadow-xl backdrop-blur-md flex flex-wrap items-center justify-between gap-4 border border-gray-700 pointer-events-auto">
-      <div className="flex items-center space-x-4">
-        <div className="font-mono text-sm px-3 py-1 bg-gray-800 rounded">
-          {voxelCount.toLocaleString()} voxels
-        </div>
-        <div className="text-gray-400 text-sm">
-          {gridSize}&times;{gridSize}&times;{gridSize}
-        </div>
-      </div>
-      <div className="flex items-center gap-4">
-        <span
-          style={{ color: fps >= 50 ? "#4ade80" : fps >= 30 ? "#facc15" : "#ef4444", fontWeight: "bold", minWidth: 52 }}
-        >
-          {fps} FPS
-        </span>
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center pointer-events-none z-10 font-mono">
+      <div
+        className="flex items-center gap-5 px-6 py-2.5 rounded-full shadow-2xl pointer-events-auto border border-[#2a2a35] transition-all"
+        style={{ background: "#22222d" }}
+      >
 
-        {/* Random fill */}
-        <input
-          type="range"
-          min={100}
-          max={Math.min(maxVoxels, 125000)}
-          step={100}
-          value={fillCount}
-          onChange={(e) => clampFillCount(Number(e.target.value))}
-          className="w-20 h-1 cursor-pointer"
-          style={{ accentColor: "#3b82f6" }}
-        />
-        <span className="w-14 text-right">{fillCount.toLocaleString()}</span>
-        <button
-          onClick={handleRandomFill}
-          className="px-2 py-0.5 rounded text-[10px] bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-        >
-          Fill
-        </button>
-        <button
-          onClick={handleClear}
-          className="px-2 py-0.5 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
-        >
-          Clear
-        </button>
-
-        {/* Stress test churn */}
-        <div className="w-px h-6 bg-gray-700 mx-2" />
-
-        <div className="flex items-center space-x-2">
-          <label className="text-xs text-gray-400 w-16 text-right cursor-help" title="Grid Size">
-            Grid
-          </label>
+        {/* 1. Grid Slider */}
+        <div className="flex items-center gap-4">
+          <div className="flex flex-col text-[#808090] text-xs leading-none">
+            <span>grid</span>
+            <span>slider</span>
+          </div>
           <input
-            title="Grid Size"
             type="range"
             min="10"
             max="100"
@@ -177,24 +136,113 @@ export default function StatusBar() {
             value={localGridSize}
             onChange={(e) => setLocalGridSize(Number(e.target.value))}
             onPointerUp={() => setStoreGridSize(localGridSize)}
-            className="w-24 accent-blue-500"
+            className="w-24 cursor-pointer"
+            style={{ accentColor: "#e2e2e8" }}
           />
-          <span className="text-xs font-mono w-8">{localGridSize}</span>
         </div>
-        <span className="text-gray-500">Stress</span>
-        <input
-          type="range"
-          min={0}
-          max={500}
-          step={10}
-          value={churnRate}
-          onChange={(e) => setChurnRate(Number(e.target.value))}
-          className="w-20 h-1 cursor-pointer"
-          style={{ accentColor: churnRate > 0 ? "#ef4444" : "#3b82f6" }}
-        />
-        <span className="w-10 text-right" style={{ color: churnRate > 0 ? "#ef4444" : "#888" }}>
-          {churnRate}/f
-        </span>
+
+        {/* 2. Dimensions */}
+        <div className="text-[#e2e2e8] text-sm font-medium">
+          {gridSize}&times;{gridSize}&times;{gridSize}
+        </div>
+
+        {/* 3. Voxel Count */}
+        <div className="flex flex-col text-[#e2e2e8] text-xs leading-none mr-2 w-[52px]">
+          <span className="font-medium text-sm">{voxelCount >= 1000 ? `${(voxelCount / 1000).toFixed(1)}k` : voxelCount}</span>
+          <span className="text-[#808090]">voxels</span>
+        </div>
+
+        {/* Separator */}
+        <div className="w-[1px] h-4 bg-[#3a3a48]"></div>
+
+        {/* 4. Color Picker Swatch */}
+        <div className="relative group flex items-center justify-center">
+          <input
+            type="color"
+            value={activeColor}
+            onChange={(e) => setActiveColor(e.target.value)}
+            className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
+            title="Custom Color"
+          />
+          <div
+            className="w-6 h-6 rounded-md transition-transform group-hover:scale-110 shadow-sm"
+            style={{
+              backgroundColor: activeColor,
+              border: "2px solid #333340",
+            }}
+          ></div>
+        </div>
+
+        {/* Separator */}
+        <div className="w-[1px] h-4 bg-[#3a3a48]"></div>
+
+        {/* 5. Stress Test & FPS */}
+        <div className="flex items-center gap-4 w-[240px]">
+          <span style={{ color: fps >= 50 ? "#10b981" : fps >= 30 ? "#facc15" : "#ef4444", fontWeight: "600" }} className="text-sm w-[56px]">
+            {fps} FPS
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setChurnRate(isStressActive ? 0 : 50)}
+              className={`text-sm transition-colors ${isStressActive ? "text-[#ef4444] font-medium" : "text-[#e2e2e8] hover:text-white"
+                }`}
+            >
+              Stress test
+            </button>
+            <div className="w-[72px]">
+              {isStressActive && (
+                <input
+                  type="range"
+                  min={10}
+                  max={500}
+                  step={10}
+                  value={churnRate}
+                  onChange={(e) => setChurnRate(Number(e.target.value))}
+                  className="w-full cursor-pointer"
+                  style={{ accentColor: "#ef4444" }}
+                  title="Churn Rate"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div className="w-[1px] h-4 bg-[#3a3a48]"></div>
+
+        {/* 6. Fill / Cancel */}
+        <div className="flex items-center gap-3 w-[200px]">
+          <input
+            type="range"
+            min={100}
+            max={Math.min(maxVoxels, 125000)}
+            step={100}
+            value={fillCount}
+            onChange={(e) => clampFillCount(Number(e.target.value))}
+            className="w-16 cursor-pointer"
+            style={{ accentColor: "#e2e2e8" }}
+            title="Fill Amount"
+          />
+          <span className="text-[#808090] text-sm w-8 text-right">
+            {fillCount >= 1000 ? `${(fillCount / 1000).toFixed(0)}k` : fillCount}
+          </span>
+          <div className="flex items-center gap-1.5 ml-1">
+            <button
+              onClick={handleRandomFill}
+              className="text-sm text-[#e2e2e8] hover:text-white transition-colors"
+            >
+              Fill
+            </button>
+            <span className="text-[#808090]">/</span>
+            <button
+              onClick={handleClear}
+              className="text-sm text-[#808090] hover:text-[#e2e2e8] transition-colors"
+            >
+              cancel
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );
