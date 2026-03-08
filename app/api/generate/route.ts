@@ -27,10 +27,13 @@ Generate ONLY a pure JavaScript code snippet that builds the shape.
 
 Rules:
 - You have access to one function: \`place(x, y, z, color, material)\`
-- The grid is from x=0 to ${gridSize - 1}, y=0 to ${gridSize - 1}, z=0 to ${gridSize - 1}. y=0 is the ground. The grid size is ${gridSize}.
+- The grid is from x=0 to ${gridSize - 1}, y=0 to ${gridSize - 1}, z=0 to ${
+    gridSize - 1
+  }. y=0 is the ground. The grid size is ${gridSize}.
 - CRITICAL: Structures must fill most of the grid. Define a variable \`const S = ${gridSize};\` and compute all positions as fractions of S (e.g. \`Math.floor(S * 0.2)\`). Never use small hard-coded ranges like 0-10.
 - Use realistic hex colors.
 - Use standard JavaScript \`for\` loops and \`Math\` functions.
+- Write COMPACT code. Use helper functions to avoid repetition. Minimize comments. Prefer loops and math over repeated place() calls.
 - Output ONLY the raw JavaScript code. No markdown, no backticks, no explanations.
 
 Example for a red surface wave:
@@ -92,7 +95,11 @@ async function routePrompt(client: Anthropic, prompt: string) {
   if (!text || text.type !== "text") throw new Error("No router response");
 
   const parsed = JSON.parse(text.text);
-  return parsed as { route: "PROCEDURAL" | "SEARCH" | "GENERATE" | "REJECT"; keywords: string | null; reasoning: string };
+  return parsed as {
+    route: "PROCEDURAL" | "SEARCH" | "GENERATE" | "REJECT";
+    keywords: string | null;
+    reasoning: string;
+  };
 }
 
 // Extract keywords quickly for manual SEARCH overrides
@@ -100,7 +107,8 @@ async function extractKeywords(client: Anthropic, prompt: string) {
   const message = await client.messages.create({
     model: "claude-haiku-3-5-20241022",
     max_tokens: 50,
-    system: "Extract 1-2 core keywords from the user's prompt to be used in a 3D model search engine. Respond with ONLY the keywords. E.g. prompt: 'a rusty old sports car' -> output: 'sports car'",
+    system:
+      "Extract 1-2 core keywords from the user's prompt to be used in a 3D model search engine. Respond with ONLY the keywords. E.g. prompt: 'a rusty old sports car' -> output: 'sports car'",
     messages: [{ role: "user", content: prompt }],
   });
   const text = message.content.find((b) => b.type === "text");
@@ -108,7 +116,11 @@ async function extractKeywords(client: Anthropic, prompt: string) {
 }
 
 // --- Bucket A: PROCEDURAL ---
-async function handleProcedural(client: Anthropic, prompt: string, gridSize: number) {
+async function handleProcedural(
+  client: Anthropic,
+  prompt: string,
+  gridSize: number,
+) {
   const message = await client.messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 4096,
@@ -138,8 +150,10 @@ async function handleProcedural(client: Anthropic, prompt: string, gridSize: num
     rawCode += "\n" + "}".repeat(opens - closes);
   }
 
+  const truncated = message.stop_reason === "max_tokens";
+
   // Return the type as 'code' so the frontend knows what to do
-  return { type: "code" as const, code: rawCode };
+  return { type: "code" as const, code: rawCode, truncated };
 }
 
 // --- Bucket B: SEARCH (Poly Pizza) ---
@@ -154,12 +168,18 @@ interface PolyPizzaModel {
   Licence: string;
 }
 
-async function handleSearch(client: Anthropic, prompt: string, keywords: string) {
+async function handleSearch(
+  client: Anthropic,
+  prompt: string,
+  keywords: string,
+) {
   const token = process.env.POLY_PIZZA_API_KEY;
   if (!token) throw new Error("NO_POLY_PIZZA_KEY");
 
   // Search Poly Pizza
-  const searchUrl = `https://api.poly.pizza/v1.1/search/${encodeURIComponent(keywords)}?Limit=3`;
+  const searchUrl = `https://api.poly.pizza/v1.1/search/${encodeURIComponent(
+    keywords,
+  )}?Limit=3`;
   const searchRes = await fetch(searchUrl, {
     headers: { "x-auth-token": token },
   });
@@ -173,22 +193,36 @@ async function handleSearch(client: Anthropic, prompt: string, keywords: string)
   let selectedIndex = 0;
   if (results.length > 1) {
     // Ask Claude Vision to pick the best match
-    const imageContent = results.slice(0, 3).map((r, i) => ([
-      { type: "text" as const, text: `Option ${i}: "${r.Title}" (${r.Category})` },
-      { type: "image" as const, source: { type: "url" as const, url: r.Thumbnail } },
-    ])).flat();
+    const imageContent = results
+      .slice(0, 3)
+      .map((r, i) => [
+        {
+          type: "text" as const,
+          text: `Option ${i}: "${r.Title}" (${r.Category})`,
+        },
+        {
+          type: "image" as const,
+          source: { type: "url" as const, url: r.Thumbnail },
+        },
+      ])
+      .flat();
 
     try {
       const visionMessage = await client.messages.create({
         model: "claude-sonnet-4-20250514",
         max_tokens: 50,
-        messages: [{
-          role: "user",
-          content: [
-            ...imageContent,
-            { type: "text", text: `Which option best matches: "${prompt}"? Reply with ONLY the number (0, 1, or 2).` },
-          ],
-        }],
+        messages: [
+          {
+            role: "user",
+            content: [
+              ...imageContent,
+              {
+                type: "text",
+                text: `Which option best matches: "${prompt}"? Reply with ONLY the number (0, 1, or 2).`,
+              },
+            ],
+          },
+        ],
       });
 
       const visionText = visionMessage.content.find((b) => b.type === "text");
@@ -220,17 +254,20 @@ async function handleGenerate(prompt: string) {
 
   // Use Hugging Face text-to-3D model
   const model = "tencent/Hunyuan3D-2";
-  const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const res = await fetch(
+    `https://api-inference.huggingface.co/models/${model}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: { output_type: "glb" },
+      }),
     },
-    body: JSON.stringify({
-      inputs: prompt,
-      parameters: { output_type: "glb" },
-    }),
-  });
+  );
 
   // Model might be loading (503)
   if (res.status === 503) {
@@ -252,7 +289,10 @@ async function handleGenerate(prompt: string) {
 
   // Check if response is binary (GLB) or JSON
   const contentType = res.headers.get("content-type") || "";
-  if (contentType.includes("application/octet-stream") || contentType.includes("model/gltf-binary")) {
+  if (
+    contentType.includes("application/octet-stream") ||
+    contentType.includes("model/gltf-binary")
+  ) {
     // Binary GLB — we need to save it and serve a URL
     // For now, convert to base64 data URL (works for small models)
     const buffer = await res.arrayBuffer();
@@ -275,25 +315,43 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const prompt = body.prompt;
-    const forceRoute = body.forceRoute as "AUTO" | "PROCEDURAL" | "SEARCH" | "GENERATE" | undefined;
+    const forceRoute = body.forceRoute as
+      | "AUTO"
+      | "PROCEDURAL"
+      | "SEARCH"
+      | "GENERATE"
+      | undefined;
     const gridSize = typeof body.gridSize === "number" ? body.gridSize : 50;
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
-      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Prompt is required" },
+        { status: 400 },
+      );
     }
     if (prompt.length > 500) {
-      return NextResponse.json({ error: "Prompt too long (max 500 characters)" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Prompt too long (max 500 characters)" },
+        { status: 400 },
+      );
     }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
+      return NextResponse.json(
+        { error: "ANTHROPIC_API_KEY not configured" },
+        { status: 500 },
+      );
     }
 
     const client = new Anthropic({ apiKey });
 
     // Step 1: Route the prompt
-    let routeResult: { route: "PROCEDURAL" | "SEARCH" | "GENERATE" | "REJECT", keywords: string | null, reasoning: string };
+    let routeResult: {
+      route: "PROCEDURAL" | "SEARCH" | "GENERATE" | "REJECT";
+      keywords: string | null;
+      reasoning: string;
+    };
 
     if (forceRoute && forceRoute !== "AUTO") {
       // Manual override
@@ -301,20 +359,31 @@ export async function POST(req: NextRequest) {
       if (forceRoute === "SEARCH") {
         keywords = await extractKeywords(client, prompt.trim());
       }
-      routeResult = { route: forceRoute, keywords, reasoning: "User manually selected this route." };
+      routeResult = {
+        route: forceRoute,
+        keywords,
+        reasoning: "User manually selected this route.",
+      };
     } else {
       // Automatic routing
       try {
         routeResult = await routePrompt(client, prompt.trim());
       } catch {
-        routeResult = { route: "PROCEDURAL" as const, keywords: null, reasoning: "Router fallback" };
+        routeResult = {
+          route: "PROCEDURAL" as const,
+          keywords: null,
+          reasoning: "Router fallback",
+        };
       }
     }
 
     const { route, keywords, reasoning } = routeResult;
 
     if (route === "REJECT") {
-      return NextResponse.json({ error: "Input rejected. Please describe a physical 3D object." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Input rejected. Please describe a physical 3D object." },
+        { status: 400 },
+      );
     }
 
     // Step 2: Execute the selected bucket
@@ -330,17 +399,27 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
-      if (msg === "NO_POLY_PIZZA_KEY" || msg === "NO_HF_TOKEN" || msg === "NO_RESULTS") {
+      if (
+        msg === "NO_POLY_PIZZA_KEY" ||
+        msg === "NO_HF_TOKEN" ||
+        msg === "NO_RESULTS"
+      ) {
         console.log(`Falling back to PROCEDURAL: ${msg}`);
       } else {
-        console.error(`${route} bucket failed, falling back to PROCEDURAL:`, err);
+        console.error(
+          `${route} bucket failed, falling back to PROCEDURAL:`,
+          err,
+        );
       }
     }
 
     // PROCEDURAL (default / fallback)
     const result = await handleProcedural(client, prompt.trim(), gridSize);
-    return NextResponse.json({ route: route === "PROCEDURAL" ? route : `${route}→PROCEDURAL`, reasoning, ...result });
-
+    return NextResponse.json({
+      route: route === "PROCEDURAL" ? route : `${route}→PROCEDURAL`,
+      reasoning,
+      ...result,
+    });
   } catch (err) {
     console.error("Generate error:", err);
     return NextResponse.json(

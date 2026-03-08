@@ -210,7 +210,7 @@ export default function StatusBar() {
           <input
             type="range"
             min={100}
-            max={Math.min(maxVoxels, 125000)}
+            max={Math.min(maxVoxels, 500000)}
             step={100}
             value={fillCount}
             onChange={(e) => clampFillCount(Number(e.target.value))}

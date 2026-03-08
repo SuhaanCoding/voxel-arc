@@ -1,7 +1,7 @@
 
 
 export const GRID_SIZE = 50;
-export const MAX_INSTANCES = 125000;
+export const MAX_INSTANCES = 500000;
 
 export const DEFAULT_COLOR = "#4a90d9";
 

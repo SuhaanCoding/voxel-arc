@@ -46,6 +46,7 @@ export default function AIGenerator() {
   const [glbData, setGlbData] = useState<{ url: string; name: string } | null>(null);
   const [scale, setScale] = useState(0.8);
   const [voxelCount, setVoxelCount] = useState(0);
+  const [truncated, setTruncated] = useState(false);
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const [pendingModel, setPendingModel] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -103,6 +104,7 @@ export default function AIGenerator() {
     setRouteInfo(null);
     setGlbData(null);
     setVoxelCount(0);
+    setTruncated(false);
 
     try {
       // Modify prompt strictly client side with grid constraints
@@ -151,6 +153,7 @@ export default function AIGenerator() {
 
           loadScene(newCommands);
           setVoxelCount(newCommands.length);
+          setTruncated(!!data.truncated);
           setStage("done");
         } catch (err) {
           setError(err instanceof Error ? `Execution error: ${err.message}` : "Failed to execute AI code.");
@@ -322,9 +325,16 @@ export default function AIGenerator() {
 
       {/* Done state */}
       {stage === "done" && (
-        <div className="text-xs text-green-400">
-          Applied {voxelCount.toLocaleString()} voxels. Use Ctrl+Z to undo.
-        </div>
+        <>
+          <div className="text-xs text-green-400">
+            Applied {voxelCount.toLocaleString()} voxels. Use Ctrl+Z to undo.
+          </div>
+          {truncated && (
+            <div className="text-xs text-yellow-400 bg-yellow-900/30 rounded px-2 py-1">
+              Output was truncated — some details may be missing. Try a simpler prompt.
+            </div>
+          )}
+        </>
       )}
 
       {/* Footer */}
